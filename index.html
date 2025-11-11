@@ -663,6 +663,13 @@
             transform: translateY(-1px);
             box-shadow: var(--shadow);
         }
+
+        .geo-action-button[disabled] {
+            opacity: 0.65;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
         </style>
         <title></title>
     </head>
@@ -708,7 +715,7 @@
                             <input id="longitude" name="longitude" type="text" placeholder="Longitude" readonly>
                         </div>
                         <div class="geo-actions">
-                            <div class="geo-status" id="geoStatus">Tap "Use my current location" to share your coordinates.</div>
+                            <div class="geo-status" id="geoStatus">We'll try to detect your location automatically. Tap "Use my current location" if it takes longer than a few seconds.</div>
                             <button type="button" class="geo-action-button" id="detectLocationBtn">Use my current location</button>
                         </div>
                     </div>
@@ -851,7 +858,9 @@
             const longitudeEl = document.getElementById("longitude");
             const feedbackEl = document.getElementById("statusFeedback");
             const detectLocationBtn = document.getElementById("detectLocationBtn");
-            const DEFAULT_GEO_PROMPT = 'Tap "Use my current location" to share your coordinates.';
+            const DEFAULT_GEO_PROMPT = "We'll try to detect your location automatically. Tap \"Use my current location\" if it takes longer than a few seconds.";
+            const GEO_PERMISSION_STATE_KEY = "tagme-geo-permission-state";
+            let geoRequestInFlight = false;
             const statusSource = new ol.source.Vector();
             const STATUS_STYLES = {
                 "safe": {
@@ -1000,47 +1009,112 @@
                 feedbackEl.style.color = isError ? "#b91c1c" : "var(--accent)";
             }
 
-            function requestGeolocation() {
+            function rememberGeoPermissionState(state) {
+                if (!("localStorage" in window)) {
+                    return;
+                }
+                try {
+                    window.localStorage.setItem(GEO_PERMISSION_STATE_KEY, state);
+                } catch (error) {
+                    console.warn("Unable to persist geolocation permission state:", error);
+                }
+            }
+
+            function readGeoPermissionState() {
+                if (!("localStorage" in window)) {
+                    return null;
+                }
+                try {
+                    return window.localStorage.getItem(GEO_PERMISSION_STATE_KEY);
+                } catch (error) {
+                    console.warn("Unable to read geolocation permission state:", error);
+                    return null;
+                }
+            }
+
+            function setDetectButtonBusy(isBusy) {
+                if (!detectLocationBtn) {
+                    return;
+                }
+                if (isBusy) {
+                    detectLocationBtn.disabled = true;
+                    detectLocationBtn.textContent = "Detecting…";
+                    detectLocationBtn.setAttribute("aria-busy", "true");
+                } else {
+                    detectLocationBtn.disabled = false;
+                    detectLocationBtn.textContent = "Use my current location";
+                    detectLocationBtn.removeAttribute("aria-busy");
+                }
+            }
+
+            function requestGeolocation(options) {
+                if (geoRequestInFlight) {
+                    return;
+                }
+
                 if (!navigator.geolocation) {
                     setGeoStatus("Geolocation is not supported on this device. Please enter details manually.", true);
                     clearGeoFields();
                     return;
                 }
 
-                setGeoStatus("Attempting to detect your location…", false);
+                const settings = Object.assign({
+                    source: "manual",
+                    timeout: 15000,
+                    maximumAge: 300000,
+                    highAccuracy: true
+                }, options || {});
+
+                geoRequestInFlight = true;
+                setDetectButtonBusy(true);
+
+                const startMessage = settings.source === "auto"
+                    ? "Trying to detect your location…"
+                    : "Detecting your location…";
+                setGeoStatus(startMessage, false);
 
                 navigator.geolocation.getCurrentPosition(
                     function (position) {
+                        geoRequestInFlight = false;
+                        setDetectButtonBusy(false);
                         if (latitudeEl) latitudeEl.value = position.coords.latitude.toFixed(6);
                         if (longitudeEl) longitudeEl.value = position.coords.longitude.toFixed(6);
                         setGeoStatus("Location detected. Review before submitting.", false);
+                        rememberGeoPermissionState("granted");
                     },
                     function (error) {
-                        const messages = {
-                            1: "Permission denied. Location unavailable.",
-                            2: "Position unavailable. Try again later.",
-                            3: "Location request timed out."
-                        };
-                        setGeoStatus(messages[error.code] || "Unable to detect your location.", true);
+                        geoRequestInFlight = false;
+                        setDetectButtonBusy(false);
+                        const code = error && typeof error.code === "number" ? error.code : 0;
+                        if (code === 1) {
+                            setGeoStatus("We can't access your location. Check device settings or enter the coordinates manually.", true);
+                            rememberGeoPermissionState("denied");
+                        } else if (code === 2) {
+                            setGeoStatus("Position unavailable. Move to an open area and try again.", true);
+                            rememberGeoPermissionState("prompt");
+                        } else if (code === 3) {
+                            setGeoStatus("Location request timed out. Move to an open area and try again.", true);
+                            rememberGeoPermissionState("prompt");
+                        } else {
+                            setGeoStatus("Unable to detect your location. Please try again.", true);
+                            rememberGeoPermissionState("prompt");
+                        }
                         clearGeoFields();
                     },
                     {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 300000
+                        enableHighAccuracy: settings.highAccuracy,
+                        timeout: settings.timeout,
+                        maximumAge: settings.maximumAge
                     }
                 );
             }
 
-            function confirmAndRequestGeolocation() {
-                setFeedback("");
-                const consent = window.confirm("Allow TagMe to use your device location to auto-fill your coordinates?");
-                if (!consent) {
-                    setGeoStatus("Location detection cancelled. You can still submit without sharing coordinates.", true);
-                    clearGeoFields();
-                    return;
+            function canAttemptAutomaticGeolocation() {
+                if (!navigator.geolocation) {
+                    return false;
                 }
-                requestGeolocation();
+                const storedState = readGeoPermissionState();
+                return storedState !== "denied";
             }
 
             function toggleModal(show) {
@@ -1062,11 +1136,20 @@
                 toggleModal(true);
                 setGeoStatus(DEFAULT_GEO_PROMPT, false);
                 clearGeoFields();
+                setDetectButtonBusy(false);
+                if (geoRequestInFlight) {
+                    geoRequestInFlight = false;
+                }
                 const nameInput = document.getElementById("reporterName");
                 window.setTimeout(function () {
                     nameInput && nameInput.focus();
                 }, 100);
                 setFeedback("");
+                window.setTimeout(function () {
+                    if (canAttemptAutomaticGeolocation()) {
+                        requestGeolocation({ source: "auto" });
+                    }
+                }, 300);
             }
 
             function closeModal() {
@@ -1077,6 +1160,8 @@
                     clearGeoFields();
                 }
                 setFeedback("");
+                geoRequestInFlight = false;
+                setDetectButtonBusy(false);
                 if (previousFocus && previousFocus.focus) {
                     previousFocus.focus();
                 }
@@ -1192,7 +1277,10 @@
             }
 
             reportBtn && reportBtn.addEventListener("click", openModal);
-            detectLocationBtn && detectLocationBtn.addEventListener("click", confirmAndRequestGeolocation);
+            detectLocationBtn && detectLocationBtn.addEventListener("click", function () {
+                setFeedback("");
+                requestGeolocation({ source: "manual" });
+            });
 
             closeButtons.forEach(function (button) {
                 button.addEventListener("click", closeModal);
