@@ -914,50 +914,24 @@
             // Google Apps Script Web App endpoint for logging status reports.
             const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRq7LkFDgbj30RijgJv42L2aLd4oTp_pSSSFDnNq7z7aNx-ktAB-8TGKLeHdgvH9BLaw/exec";
 
-            const STORAGE_KEY = "tagme-status-reports";
+            const REPORT_MEMORY_LIMIT = 250;
+            const reportIndex = new Map();
 
             function readStoredReports() {
-                if (typeof window === "undefined" || !("localStorage" in window)) {
-                    return [];
-                }
-                try {
-                    const raw = window.localStorage.getItem(STORAGE_KEY);
-                    if (!raw) {
-                        return [];
-                    }
-                    const parsed = JSON.parse(raw);
-                    return Array.isArray(parsed) ? parsed : [];
-                } catch (error) {
-                    console.warn("Unable to read stored reports:", error);
-                    return [];
-                }
-            }
-
-            function writeStoredReports(reports) {
-                if (typeof window === "undefined" || !("localStorage" in window)) {
-                    return;
-                }
-                try {
-                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
-                } catch (error) {
-                    console.warn("Unable to persist reports:", error);
-                }
+                return Array.from(reportIndex.values());
             }
 
             function persistReportEntry(entry) {
-                if (!entry) {
+                if (!entry || !entry.timestamp) {
                     return false;
                 }
-                const reports = readStoredReports();
-                if (entry.timestamp && reports.some(function (item) { return item.timestamp === entry.timestamp; })) {
-                    return false;
+                const exists = reportIndex.has(entry.timestamp);
+                if (!exists && reportIndex.size >= REPORT_MEMORY_LIMIT) {
+                    const oldestKey = reportIndex.keys().next().value;
+                    reportIndex.delete(oldestKey);
                 }
-                reports.push(entry);
-                if (reports.length > 250) {
-                    reports.splice(0, reports.length - 250);
-                }
-                writeStoredReports(reports);
-                return true;
+                reportIndex.set(entry.timestamp, entry);
+                return !exists;
             }
 
             function formatTimestamp(value) {
