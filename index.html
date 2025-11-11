@@ -1190,6 +1190,7 @@
 
                 map.getViewport().addEventListener("mouseleave", hideTooltip);
                 hydrateStoredReports();
+                scheduleRemoteSync(REMOTE_SYNC_INITIAL_DELAY);
             }
             let previousFocus = null;
 
@@ -1344,6 +1345,106 @@
                 }
                 const storedState = readGeoPermissionState();
                 return storedState !== "denied";
+            }
+
+            function buildRemoteListUrl() {
+                if (!GOOGLE_SCRIPT_URL) {
+                    return null;
+                }
+                try {
+                    const url = new URL(GOOGLE_SCRIPT_URL);
+                    const currentAction = url.searchParams.get("action");
+                    if (!currentAction) {
+                        url.searchParams.set("action", "list");
+                    }
+                    return url.toString();
+                } catch (error) {
+                    const separator = GOOGLE_SCRIPT_URL.includes("?") ? "&" : "?";
+                    return `${GOOGLE_SCRIPT_URL}${separator}action=list`;
+                }
+            }
+
+            function extractRemoteRecords(payload) {
+                if (!payload) {
+                    return [];
+                }
+                if (Array.isArray(payload)) {
+                    return payload;
+                }
+                const keys = ["records", "data", "entries", "items", "result"];
+                for (let index = 0; index < keys.length; index += 1) {
+                    const key = keys[index];
+                    if (Array.isArray(payload[key])) {
+                        return payload[key];
+                    }
+                }
+                return [];
+            }
+
+            async function fetchRemoteReports() {
+                if (!GOOGLE_SCRIPT_URL || remoteSyncInFlight) {
+                    return;
+                }
+                const listUrl = buildRemoteListUrl();
+                if (!listUrl) {
+                    return;
+                }
+                remoteSyncInFlight = true;
+                try {
+                    const response = await fetch(listUrl, {
+                        method: "GET",
+                        headers: {
+                            "Accept": "application/json"
+                        },
+                        cache: "no-store"
+                    });
+                    if (!response.ok) {
+                        throw new Error(`Unable to read remote reports (status ${response.status})`);
+                    }
+                    const payload = await response.json().catch(function () {
+                        return null;
+                    });
+                    const records = extractRemoteRecords(payload);
+                    if (!Array.isArray(records) || records.length === 0) {
+                        return;
+                    }
+                    let newCount = 0;
+                    records.forEach(function (entry) {
+                        const normalized = normalizeReportEntry(entry);
+                        if (!normalized) {
+                            return;
+                        }
+                        const inserted = persistReportEntry(normalized);
+                        plotReportEntry(normalized, {
+                            flyTo: false,
+                            showCallout: false,
+                            showPulse: false
+                        });
+                        if (inserted) {
+                            newCount += 1;
+                        }
+                    });
+                    if (newCount > 0) {
+                        updateMapInstruction(`${newCount} new ${newCount === 1 ? "status" : "statuses"} loaded on the map.`, "active", 4000);
+                    }
+                } catch (error) {
+                    console.warn("Unable to fetch remote reports:", error);
+                } finally {
+                    remoteSyncInFlight = false;
+                }
+            }
+
+            function scheduleRemoteSync(delay) {
+                if (!GOOGLE_SCRIPT_URL) {
+                    return;
+                }
+                if (remoteSyncHandle) {
+                    window.clearTimeout(remoteSyncHandle);
+                }
+                remoteSyncHandle = window.setTimeout(async function () {
+                    await fetchRemoteReports();
+                    scheduleRemoteSync(REMOTE_SYNC_INTERVAL);
+                }, Math.max(0, delay));
             }
 
             function flyToCurrentLocation() {
@@ -1656,6 +1757,7 @@
                     } else {
                         console.warn("No valid coordinates to map.");
                     }
+                    scheduleRemoteSync(5000);
                     window.setTimeout(function () {
                         closeModal();
                     }, 1500);
