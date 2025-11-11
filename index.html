@@ -125,6 +125,13 @@
             padding: clamp(1rem, 3vw, 2.5rem);
         }
 
+        .map-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: clamp(1rem, 2.5vw, 2rem);
+            align-items: start;
+        }
+
         .map-wrapper {
             flex: 1;
             display: flex;
@@ -134,6 +141,38 @@
             box-shadow: var(--shadow);
             overflow: hidden;
             min-height: clamp(320px, 65vh, 720px);
+        }
+
+        .info-panel {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .info-card {
+            background: #fff;
+            border-radius: 1rem;
+            box-shadow: var(--shadow);
+            padding: 1.25rem;
+            display: grid;
+            gap: 0.85rem;
+            min-width: 0;
+        }
+
+        .info-card header {
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .info-card header h2 {
+            margin: 0;
+            font-size: 1.05rem;
+            color: var(--text);
+        }
+
+        .info-card header p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.9rem;
         }
 
         .map-header {
@@ -354,6 +393,10 @@
                 padding: clamp(1rem, 4vw, 1.5rem);
             }
 
+            .map-layout {
+                gap: 1.25rem;
+            }
+
             .map-wrapper {
                 min-height: clamp(320px, 55vh, 640px);
             }
@@ -367,6 +410,10 @@
             main {
                 padding: clamp(0.75rem, 5vw, 1.25rem);
                 padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+            }
+
+            .map-layout {
+                gap: 1rem;
             }
 
             .map-header {
@@ -413,6 +460,10 @@
                 min-height: 360px;
             }
 
+            .info-panel {
+                order: 3;
+            }
+
             .mobile-toolbar {
                 display: flex;
             }
@@ -430,6 +481,12 @@
             }
         }
 
+        @media (min-width: 961px) {
+            .map-layout {
+                grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.95fr);
+                align-items: stretch;
+            }
+        }
         @keyframes reportPulse {
             0% {
                 opacity: 0.8;
@@ -608,6 +665,87 @@
             text-transform: uppercase;
             letter-spacing: 0.08em;
             color: rgba(226, 232, 240, 0.75);
+        }
+
+        .report-table-wrapper {
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 0.85rem;
+            overflow: hidden;
+        }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .report-table thead {
+            background: rgba(0, 92, 187, 0.08);
+        }
+
+        .report-table th,
+        .report-table td {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+            vertical-align: middle;
+        }
+
+        .report-table th {
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .report-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .report-table__status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-weight: 600;
+        }
+
+        .report-table__status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .report-table__coords {
+            font-family: "Fira Code", "SFMono-Regular", Consolas, monospace;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        .report-table__empty {
+            padding: 1rem;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .report-table-scroller {
+            max-height: clamp(240px, 55vh, 480px);
+            overflow-y: auto;
+        }
+
+        .report-table-scroller::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .report-table-scroller::-webkit-scrollbar-track {
+            background: rgba(148, 163, 184, 0.15);
+            border-radius: 999px;
+        }
+
+        .report-table-scroller::-webkit-scrollbar-thumb {
+            background: rgba(71, 85, 105, 0.35);
+            border-radius: 999px;
         }
 
         .report-tooltip {
@@ -818,15 +956,41 @@
         </div>
         <main>
             <section class="map-section">
-                <div class="map-wrapper">
-                    <div class="map-body">
-                        <div id="map">
-                            <div id="popup" class="ol-popup">
-                                <a href="#" id="popup-closer" class="ol-popup-closer"></a>
-                                <div id="popup-content"></div>
+                <div class="map-layout">
+                    <div class="map-wrapper">
+                        <div class="map-body">
+                            <div id="map">
+                                <div id="popup" class="ol-popup">
+                                    <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+                                    <div id="popup-content"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    <aside class="info-panel" aria-label="Community status reports">
+                        <div class="info-card">
+                            <header>
+                                <h2>Latest Reports</h2>
+                                <p>Live feed from the community spreadsheet.</p>
+                            </header>
+                            <div class="report-table-wrapper">
+                                <div class="report-table-scroller">
+                                    <table class="report-table" aria-live="polite">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Status</th>
+                                                <th scope="col">Person</th>
+                                                <th scope="col">Coordinates</th>
+                                                <th scope="col">Updated</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="reportsTableBody"></tbody>
+                                    </table>
+                                    <div class="report-table__empty" id="reportsTableEmpty">No reports yet. When someone checks in, their status will appear here.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
                 </div>
                 <p class="map-instruction" role="note">Please make sure you have internet connectivity and your location services are enabled.</p>
                 <div class="mobile-support" aria-label="Mobile quick guidance">
@@ -894,7 +1058,7 @@
             </div>
         </div>
         <footer>
-            <div>© <span id="year"></span> TagMe. All rights reserved.</div>
+            <div>© <span id="year"></span> RPD. All rights reserved.</div>
             <nav class="footer-links">
                 <a href="#" aria-label="View privacy policy">Privacy</a>
                 <a href="#" aria-label="View terms of service">Terms</a>
@@ -998,6 +1162,84 @@
                 );
             }
 
+            function formatCoordinate(value) {
+                if (!Number.isFinite(value)) {
+                    return "";
+                }
+                return value.toFixed(4);
+            }
+
+            function getSortedReports() {
+                return readStoredReports()
+                    .slice()
+                    .sort(function (a, b) {
+                        const timeA = new Date(a.timestamp).getTime();
+                        const timeB = new Date(b.timestamp).getTime();
+                        if (Number.isNaN(timeA) && Number.isNaN(timeB)) {
+                            return 0;
+                        }
+                        if (Number.isNaN(timeA)) {
+                            return 1;
+                        }
+                        if (Number.isNaN(timeB)) {
+                            return -1;
+                        }
+                        return timeB - timeA;
+                    });
+            }
+
+            function renderReportTable() {
+                if (!reportTableBody || !reportTableEmpty) {
+                    return;
+                }
+
+                while (reportTableBody.firstChild) {
+                    reportTableBody.removeChild(reportTableBody.firstChild);
+                }
+
+                const reports = getSortedReports();
+                if (!reports.length) {
+                    reportTableEmpty.style.display = "block";
+                    return;
+                }
+
+                reportTableEmpty.style.display = "none";
+
+                reports.forEach(function (entry) {
+                    const normalized = normalizeReportEntry(entry);
+                    if (!normalized) {
+                        return;
+                    }
+
+                    const statusKey = normalized.statusSelect || "unknown";
+                    const styleConfig = STATUS_STYLES[statusKey] || STATUS_STYLES.unknown;
+                    const row = document.createElement("tr");
+
+                    const statusCell = document.createElement("td");
+                    statusCell.className = "report-table__status";
+                    const indicator = document.createElement("span");
+                    indicator.className = "report-table__status-indicator";
+                    indicator.style.background = styleConfig.color;
+                    indicator.setAttribute("aria-hidden", "true");
+                    const statusLabel = document.createElement("span");
+                    statusLabel.textContent = styleConfig.label;
+                    statusCell.append(indicator, statusLabel);
+
+                    const nameCell = document.createElement("td");
+                    nameCell.textContent = normalized.reporterName || "Anonymous";
+
+                    const coordsCell = document.createElement("td");
+                    coordsCell.className = "report-table__coords";
+                    coordsCell.textContent = `${formatCoordinate(normalized.latitude)}°, ${formatCoordinate(normalized.longitude)}°`;
+
+                    const timeCell = document.createElement("td");
+                    timeCell.textContent = formatTimestamp(normalized.timestamp);
+
+                    row.append(statusCell, nameCell, coordsCell, timeCell);
+                    reportTableBody.appendChild(row);
+                });
+            }
+
             function hydrateStoredReports() {
                 const storedReports = readStoredReports();
                 storedReports.forEach(function (entry) {
@@ -1007,6 +1249,7 @@
                         showPulse: false
                     });
                 });
+                renderReportTable();
             }
 
             const now = new Date();
@@ -1031,7 +1274,9 @@
             const mapInstructionEl = document.querySelector(".map-instruction");
             const mapInstructionDefault = mapInstructionEl ? mapInstructionEl.textContent : "";
             const REMOTE_SYNC_INTERVAL = 45000;
-            const REMOTE_SYNC_INITIAL_DELAY = 2000;
+            const REMOTE_SYNC_INITIAL_DELAY = 0;
+            const reportTableBody = document.getElementById("reportsTableBody");
+            const reportTableEmpty = document.getElementById("reportsTableEmpty");
             let geoRequestInFlight = false;
             let mapInstructionTimer = null;
             let remoteSyncHandle = null;
@@ -1164,7 +1409,9 @@
 
                 map.getViewport().addEventListener("mouseleave", hideTooltip);
                 hydrateStoredReports();
-                scheduleRemoteSync(REMOTE_SYNC_INITIAL_DELAY);
+                fetchRemoteReports().finally(function () {
+                    scheduleRemoteSync(REMOTE_SYNC_INTERVAL);
+                });
             }
             let previousFocus = null;
 
@@ -1379,28 +1626,28 @@
                         return null;
                     });
                     const records = extractRemoteRecords(payload);
-                    if (!Array.isArray(records) || records.length === 0) {
-                        return;
-                    }
-                    let newCount = 0;
-                    records.forEach(function (entry) {
-                        const normalized = normalizeReportEntry(entry);
-                        if (!normalized) {
-                            return;
-                        }
-                        const inserted = persistReportEntry(normalized);
-                        plotReportEntry(normalized, {
-                            flyTo: false,
-                            showCallout: false,
-                            showPulse: false
+                    if (Array.isArray(records) && records.length > 0) {
+                        let newCount = 0;
+                        records.forEach(function (entry) {
+                            const normalized = normalizeReportEntry(entry);
+                            if (!normalized) {
+                                return;
+                            }
+                            const inserted = persistReportEntry(normalized);
+                            plotReportEntry(normalized, {
+                                flyTo: false,
+                                showCallout: false,
+                                showPulse: false
+                            });
+                            if (inserted) {
+                                newCount += 1;
+                            }
                         });
-                        if (inserted) {
-                            newCount += 1;
+                        if (newCount > 0) {
+                            updateMapInstruction(`${newCount} new ${newCount === 1 ? "status" : "statuses"} loaded on the map.`, "active", 4000);
                         }
-                    });
-                    if (newCount > 0) {
-                        updateMapInstruction(`${newCount} new ${newCount === 1 ? "status" : "statuses"} loaded on the map.`, "active", 4000);
                     }
+                    renderReportTable();
                 } catch (error) {
                     console.warn("Unable to fetch remote reports:", error);
                 } finally {
@@ -1728,6 +1975,7 @@
                             entry.reporterName,
                             { timestamp: entry.timestamp }
                         );
+                        renderReportTable();
                     } else {
                         console.warn("No valid coordinates to map.");
                     }
