@@ -971,28 +971,67 @@
                 return `${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })} • ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
             }
 
+            function normalizeReportEntry(entry) {
+                if (!entry) {
+                    return null;
+                }
+
+                const latitudeCandidate = entry.latitude ?? entry.lat ?? entry.Latitude ?? entry.Lat;
+                const longitudeCandidate = entry.longitude ?? entry.lon ?? entry.Lon ?? entry.lng ?? entry.Longitude ?? entry.Lng;
+                const timestampCandidate = entry.timestamp ?? entry.time ?? entry.updatedAt ?? entry.createdAt ?? entry.submittedAt;
+
+                const lat = typeof latitudeCandidate === "string" ? parseFloat(latitudeCandidate) : latitudeCandidate;
+                const lon = typeof longitudeCandidate === "string" ? parseFloat(longitudeCandidate) : longitudeCandidate;
+
+                if (!Number.isFinite(lat) || !Number.isFinite(lon) || !timestampCandidate) {
+                    return null;
+                }
+
+                const statusKeyCandidate = entry.statusSelect ?? entry.status ?? entry.Status ?? entry.state ?? "unknown";
+                const messageCandidate = entry.statusMessage ?? entry.message ?? entry.details ?? entry.notes ?? "";
+                const nameCandidate = entry.reporterName ?? entry.name ?? entry.fullName ?? "";
+
+                return {
+                    timestamp: timestampCandidate,
+                    reporterName: nameCandidate,
+                    latitude: lat,
+                    longitude: lon,
+                    statusSelect: statusKeyCandidate,
+                    statusMessage: messageCandidate,
+                    source: entry.source ?? entry.Source ?? "remote"
+                };
+            }
+
+            function plotReportEntry(entry, options) {
+                const normalized = normalizeReportEntry(entry);
+                if (!normalized) {
+                    return;
+                }
+
+                const settings = Object.assign({
+                    flyTo: false,
+                    showCallout: false,
+                    showPulse: false
+                }, options || {});
+
+                focusOnReport(
+                    normalized.longitude,
+                    normalized.latitude,
+                    normalized.statusSelect,
+                    normalized.statusMessage,
+                    normalized.reporterName,
+                    Object.assign({ timestamp: normalized.timestamp }, settings)
+                );
+            }
+
             function hydrateStoredReports() {
                 const storedReports = readStoredReports();
                 storedReports.forEach(function (entry) {
-                    const lat = typeof entry.latitude === "string" ? parseFloat(entry.latitude) : entry.latitude;
-                    const lon = typeof entry.longitude === "string" ? parseFloat(entry.longitude) : entry.longitude;
-                    const statusKey = entry.statusSelect || entry.status || "unknown";
-                    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-                        return;
-                    }
-                    focusOnReport(
-                        lon,
-                        lat,
-                        statusKey,
-                        entry.statusMessage || entry.message || "",
-                        entry.reporterName || "",
-                        {
-                            timestamp: entry.timestamp,
-                            flyTo: false,
-                            showCallout: false,
-                            showPulse: false
-                        }
-                    );
+                    plotReportEntry(entry, {
+                        flyTo: false,
+                        showCallout: false,
+                        showPulse: false
+                    });
                 });
             }
 
@@ -1017,8 +1056,12 @@
             const mobileLocateBtn = document.getElementById("mobileLocateBtn");
             const mapInstructionEl = document.querySelector(".map-instruction");
             const mapInstructionDefault = mapInstructionEl ? mapInstructionEl.textContent : "";
+            const REMOTE_SYNC_INTERVAL = 45000;
+            const REMOTE_SYNC_INITIAL_DELAY = 2000;
             let geoRequestInFlight = false;
             let mapInstructionTimer = null;
+            let remoteSyncHandle = null;
+            let remoteSyncInFlight = false;
             const statusSource = new ol.source.Vector();
             const STATUS_STYLES = {
                 "safe": {
