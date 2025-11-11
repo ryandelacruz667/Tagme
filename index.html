@@ -635,6 +635,34 @@
             font-size: 0.85rem;
             color: var(--muted);
         }
+
+        .geo-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .geo-action-button {
+            align-self: flex-start;
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            border: 1px solid rgba(0, 92, 187, 0.35);
+            background: transparent;
+            color: var(--accent);
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .geo-action-button:focus-visible {
+            outline: 3px solid rgba(0, 92, 187, 0.35);
+            outline-offset: 2px;
+        }
+
+        .geo-action-button:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
         </style>
         <title></title>
     </head>
@@ -679,7 +707,10 @@
                             <input id="latitude" name="latitude" type="text" placeholder="Latitude" readonly>
                             <input id="longitude" name="longitude" type="text" placeholder="Longitude" readonly>
                         </div>
-                        <div class="geo-status" id="geoStatus">Attempting to detect your location…</div>
+                        <div class="geo-actions">
+                            <div class="geo-status" id="geoStatus">Tap "Use my current location" to share your coordinates.</div>
+                            <button type="button" class="geo-action-button" id="detectLocationBtn">Use my current location</button>
+                        </div>
                     </div>
                     <div class="form-field">
                         <label for="statusSelect">Status</label>
@@ -819,6 +850,8 @@
             const latitudeEl = document.getElementById("latitude");
             const longitudeEl = document.getElementById("longitude");
             const feedbackEl = document.getElementById("statusFeedback");
+            const detectLocationBtn = document.getElementById("detectLocationBtn");
+            const DEFAULT_GEO_PROMPT = 'Tap "Use my current location" to share your coordinates.';
             const statusSource = new ol.source.Vector();
             const STATUS_STYLES = {
                 "safe": {
@@ -999,6 +1032,17 @@
                 );
             }
 
+            function confirmAndRequestGeolocation() {
+                setFeedback("");
+                const consent = window.confirm("Allow TagMe to use your device location to auto-fill your coordinates?");
+                if (!consent) {
+                    setGeoStatus("Location detection cancelled. You can still submit without sharing coordinates.", true);
+                    clearGeoFields();
+                    return;
+                }
+                requestGeolocation();
+            }
+
             function toggleModal(show) {
                 if (!modalBackdrop) return;
                 if (show) {
@@ -1016,7 +1060,8 @@
                 if (!modalBackdrop) return;
                 previousFocus = document.activeElement;
                 toggleModal(true);
-                requestGeolocation();
+                setGeoStatus(DEFAULT_GEO_PROMPT, false);
+                clearGeoFields();
                 const nameInput = document.getElementById("reporterName");
                 window.setTimeout(function () {
                     nameInput && nameInput.focus();
@@ -1028,7 +1073,7 @@
                 toggleModal(false);
                 if (form) {
                     form.reset();
-                    setGeoStatus("Attempting to detect your location…", false);
+                    setGeoStatus(DEFAULT_GEO_PROMPT, false);
                     clearGeoFields();
                 }
                 setFeedback("");
@@ -1147,6 +1192,7 @@
             }
 
             reportBtn && reportBtn.addEventListener("click", openModal);
+            detectLocationBtn && detectLocationBtn.addEventListener("click", confirmAndRequestGeolocation);
 
             closeButtons.forEach(function (button) {
                 button.addEventListener("click", closeModal);
